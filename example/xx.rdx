@@ -1,0 +1,23 @@
+### backupninja RDX config file ###
+
+# block name used to find the drive (first detected will be used)
+blockdevname = RDX GoVault RD1000
+
+# how many backup must be kept on the drive (must be between 1 to x)
+bkptokeep = 5
+
+# filesystem to use with the drive (on the first partition of the drive)
+drivefs = btrfs
+
+# autoformat the drive in case of wrong fs (yes or no) => not implemented yet
+autoformat = no
+
+# folder to backup
+backupfolder = /etc /home /var/www
+
+# folder prefix name place in the root of the drive.
+folderprefix = backup-
+
+# rsync exclude paterns (separated by space)
+rsyncexclude = nosave nobackup
+

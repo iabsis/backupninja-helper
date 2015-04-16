@@ -1,0 +1,132 @@
+#!/bin/bash
+
+getconf blockdevname
+getconf bkptokeep 3
+getconf drivefs ext2
+getconf autoformat no
+getconf backupfolder
+getconf folderprefix
+getconf rsyncexclude
+getconf rsyncargs -aAH
+
+detectTape() {
+  for dev in /sys/block/* ; do
+    for model in $blockdevname ; do
+      if grep $model $dev/device/model >/dev/null 2>&1 ; then
+        debug "Detected $model drive on /dev/$(basename $dev)"
+        echo $(basename $dev)
+	exit 0
+      fi
+    done
+  done
+  fatal "No drive with model $blockdevname detected on this system"
+  exit 1
+}
+
+mountTape() {
+  blockdev --rereadpt /dev/${1}
+  if [ "$?" = 1 ] ; then
+    fatal "No tape detected in /dev/${1} or already mounted"
+    return 1
+  fi
+  sleep 1
+  if mount | grep ${1} >/dev/null; then
+    fatal "The drive is already mounted somewhere else, please umount first"
+    return 2
+  fi
+
+  mounttmp=$(mktemp -d --suffix "-ninjaBackupTape")
+  debug "mount -t $drivefs /dev/${1}1 $mounttmp"
+  mount -t $drivefs /dev/${1}1 $mounttmp
+  case $? in
+    3)
+      fatal "Unable to mount the drive"
+      return 3
+    ;;
+    4)
+      fatal "Unable to mount the drive"
+      return 4
+    ;;
+    0)
+     debug "Device /dev/${1} mounted on $mounttmp"
+    ;;
+    *)
+      fatal "An unknown error has occured when mounting drive, out code: $?"
+      return $?
+    ;;
+  esac
+}
+
+umountTape() {
+  for device in $(mount | grep ${1} | cut -d' '  -f1) ; do
+    umount $device
+    debug "Umounted all instance of $device"
+  done
+  [ -e  /tmp/tmp.*-ninjaBackupTape ] && rmdir /tmp/tmp.*-ninjaBackupTape
+}
+
+testWrite() {
+  testfile=$(mktemp --tmpdir=$mounttmp || fatal "Unable to write on the device, please check the lock")
+  debug "Write test success on $testfile"
+  rm -f $testfile
+}
+
+formatTape() {
+  mkfs -t $drivefs /dev/${1}
+}
+
+runRsync() {
+  ## check value for bkptokeep
+  [ "$bkptokeep" -lt 0 ] && fatal "bkptokeep value must be 0 or greater"
+
+  if [ $bkptokeep -gt 0 ] ; then
+
+    ## delete oldest Backup
+    debug "Delete of $mounttmp/${folderprefix}$bkptokeep"
+    [ -e $mounttmp/${folderprefix}$bkptokeep ] && rm -rf $mounttmp/${folderprefix}$bkptokeep
+
+    for history in $(seq $bkptokeep -1 1); do
+      debug "Move folder ${folderprefix}$(($history -1)) to ${folderprefix}$history"
+      [ -e $mounttmp/${folderprefix}$(($history -1)) ] && mv $mounttmp/${folderprefix}$(($history -1)) $mounttmp/${folderprefix}$history
+    done
+
+    ## construct and repare the receipient rsync folder
+    mkdir -p $mounttmp/${folderprefix}0/
+    [ -d $mounttmp/${folderprefix}1 ] && cp -aRl $mounttmp/${folderprefix}1/* $mounttmp/${folderprefix}0/
+    [ -e $mounttmp/${folderprefix}0/date ] && rm $mounttmp/${folderprefix}0/date
+    rsyncargs="$(echo $rsyncargs --delete)"
+  fi
+
+  ## initial folder create (in case of it doesn't exist
+  mkdir -p $mounttmp/${folderprefix}0/
+  date +%c > $mounttmp/${folderprefix}0/date
+
+  # construct the ignore list
+  for folder in  $rsyncexclude ; do
+	rsyncargs="$(echo $rsyncargs --exclude $folder)"
+  done
+
+  # run the command for each folder to backup
+  for folder in $backupfolder ; do
+    mkdir -p $mounttmp/${folderprefix}0/$folder/
+    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/
+    debug "Run: rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/"
+  done
+}
+
+tapeDevice=$(detectTape)
+[ -z $tapeDevice ] && exit 1
+
+# Umount all others intances of tape
+umountTape $tapeDevice
+
+# Mount properly the tape
+mountTape $tapeDevice || exit 1
+
+# Run Rsync on folder
+if testWrite ; then
+  runRsync
+fi
+
+# Umount drive and then clean temp folder
+umountTape $tapeDevice
