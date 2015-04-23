@@ -35,7 +35,7 @@ mountTape() {
     return 2
   fi
 
-  mounttmp=$(mktemp -d --suffix "-ninjaBackupTape")
+  mounttmp=$(mktemp -d)
   debug "mount -t $drivefs /dev/${1}1 $mounttmp"
   mount -t $drivefs /dev/${1}1 $mounttmp
   case $? in
@@ -66,9 +66,9 @@ umountTape() {
 }
 
 testWrite() {
-  testfile=$(mktemp --tmpdir=$mounttmp || fatal "Unable to write on the device, please check the lock")
+  touch /$mounttmp/test || fatal "Unable to write on the device, please check the lock"
   debug "Write test success on $testfile"
-  rm -f $testfile
+  rm -f /$mounttmp/test
 }
 
 formatTape() {
@@ -94,7 +94,9 @@ runRsync() {
     mkdir -p $mounttmp/${folderprefix}0/
     [ -d $mounttmp/${folderprefix}1 ] && cp -aRl $mounttmp/${folderprefix}1/* $mounttmp/${folderprefix}0/
     [ -e $mounttmp/${folderprefix}0/date ] && rm $mounttmp/${folderprefix}0/date
-    rsyncargs="$(echo $rsyncargs --delete)"
+    rsyncargs="$(echo $rsyncargs --delete-after)"
+  else
+    rsyncargs="$(echo $rsyncargs --inplace --delete-after)"
   fi
 
   ## initial folder create (in case of it doesn't exist
@@ -103,7 +105,7 @@ runRsync() {
 
   # construct the ignore list
   for folder in  $rsyncexclude ; do
-	rsyncargs="$(echo $rsyncargs --exclude $folder)"
+    rsyncargs="$(echo $rsyncargs --exclude $folder)"
   done
 
   # run the command for each folder to backup
@@ -125,7 +127,7 @@ mountTape $tapeDevice || exit 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync
+  runRsync || exit 1
 fi
 
 # Umount drive and then clean temp folder
