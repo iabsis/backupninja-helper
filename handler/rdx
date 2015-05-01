@@ -15,7 +15,7 @@ detectTape() {
       if grep $model $dev/device/model >/dev/null 2>&1 ; then
         debug "Detected $model drive on /dev/$(basename $dev)"
         echo $(basename $dev)
-	exit 0
+        exit 0
       fi
     done
   done
@@ -111,8 +111,13 @@ runRsync() {
   # run the command for each folder to backup
   for folder in $backupfolder ; do
     mkdir -p $mounttmp/${folderprefix}0/$folder/
-    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/
     debug "Run: rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/"
+    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/ || return $?
+    excode=$?
+    if [ ! "$excode" = 0 ] ; then
+      fatal "An error as occured during the Rsync run, error code : $excode"
+      return $excode
+    fi
   done
 }
 
@@ -127,7 +132,7 @@ mountTape $tapeDevice || exit 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync || exit 1
+  runRsync
 fi
 
 # Umount drive and then clean temp folder
