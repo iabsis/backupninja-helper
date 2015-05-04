@@ -1,0 +1,13 @@
+### backupninja RDX config file ###
+
+# folder prefix name place in the root of the drive.
+tarname = rootfs
+
+# tar exclude paterns (separated by space - don't prefix the initial /).
+tarexclude = home var/www var/cache/apt-cacher
+
+# tar compression possible value none, bz2, gz, xz.
+tarcompression = gz
+
+# location where store the backup
+backupdir = /var/backups/

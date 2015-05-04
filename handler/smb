@@ -1,0 +1,102 @@
+#!/bin/bash
+
+getconf servershare //server/share
+getconf serverlogin
+getconf serverpath
+getconf serverpassword
+getconf drivefs cifs
+getconf backupfolder
+getconf folderprefix
+getconf rsyncexclude
+getconf rsyncargs -rlptD
+
+
+mountSmb() {
+  mounttmp=$(mktemp -d)
+  debug "mount -t $drivefs ${servershare} ${mounttmp} -o username=${serverlogin},password=${serverpassword}"
+  mount -t $drivefs ${servershare} ${mounttmp} -o username=${serverlogin},password=${serverpassword}
+  case $? in
+    3)
+      fatal "Unable to mount the drive"
+      return 3
+    ;;
+    4)
+      fatal "Unable to mount the drive"
+      return 4
+    ;;
+    0)
+     debug "Device /dev/${1} mounted on $mounttmp"
+    ;;
+    *)
+      fatal "An unknown error has occured when mounting share, out code: $?"
+      return $?
+    ;;
+  esac
+}
+
+umountSmb() {
+  for device in $(mount | grep ${1} | cut -d' '  -f1) ; do
+    umount $device
+    debug "Umounted all instance of $device"
+  done
+  [ -e  /tmp/tmp.* ] && rmdir /tmp/tmp.*
+}
+
+testWrite() {
+  touch /$mounttmp/$serverpath/test || fatal "Unable to write on the device, please check the lock"
+  debug "Write test success on $testfile"
+  rm -f /$mounttmp/$serverpath/test
+}
+
+runRsync() {
+  ## check value for bkptokeep
+
+  rsyncargs="$(echo $rsyncargs --inplace --delete-before)"
+
+
+  ## initial folder create (in case of it doesn't exist
+  mkdir -p $mounttmp/$serverpath/${folderprefix}0/
+  date +%c > $mounttmp/$serverpath/${folderprefix}0/date
+
+  # construct the ignore list
+  for folder in  $rsyncexclude ; do
+    rsyncargs="$(echo $rsyncargs --exclude $folder)"
+  done
+
+  # run the command for each folder to backup
+  for folder in $backupfolder ; do
+    mkdir -p $mounttmp/$serverpath/${folderprefix}0/$folder/
+    debug "Run: rsync $rsyncargs $folder/* $mounttmp/$serverpath/${folderprefix}0/$folder/"
+    rsync $rsyncargs $folder/* $mounttmp/$serverpath/${folderprefix}0/$folder/ || return $?
+    excode=$?
+    if [ ! "$excode" = 0 ]; then
+      case ${excode} in
+        24)
+          # files vanished, ignoring this error
+        ;;
+        12)
+          fatal "An error as occured coming probably from space issue on the backup drive."
+          return $excode
+        ;;
+        *)
+          fatal "An error as occured during the Rsync run, error code : $excode"
+          return $excode
+        ;;
+      esac
+    fi
+  done
+}
+
+# Umount all others intances of tape
+umountSmb ${servershare}
+
+# Mount properly the samba
+mountSmb || exit 1
+
+# Run Rsync on folder
+if testWrite ; then
+  runRsync || (umountSmb ${servershare} && exit 1)
+fi
+
+# Umount drive and then clean temp folder
+umountSmb ${servershare}

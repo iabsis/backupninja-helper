@@ -15,7 +15,7 @@ detectTape() {
       if grep $model $dev/device/model >/dev/null 2>&1 ; then
         debug "Detected $model drive on /dev/$(basename $dev)"
         echo $(basename $dev)
-        exit 0
+        return 0
       fi
     done
   done
@@ -62,7 +62,7 @@ umountTape() {
     umount $device
     debug "Umounted all instance of $device"
   done
-  [ -e  /tmp/tmp.*-ninjaBackupTape ] && rmdir /tmp/tmp.*-ninjaBackupTape
+  [ -e  /tmp/tmp.* ] && rmdir /tmp/tmp.*
 }
 
 testWrite() {
@@ -94,9 +94,9 @@ runRsync() {
     mkdir -p $mounttmp/${folderprefix}0/
     [ -d $mounttmp/${folderprefix}1 ] && cp -aRl $mounttmp/${folderprefix}1/* $mounttmp/${folderprefix}0/
     [ -e $mounttmp/${folderprefix}0/date ] && rm $mounttmp/${folderprefix}0/date
-    rsyncargs="$(echo $rsyncargs --delete-after)"
+    rsyncargs="$(echo $rsyncargs --delete-before)"
   else
-    rsyncargs="$(echo $rsyncargs --inplace --delete-after)"
+    rsyncargs="$(echo $rsyncargs --inplace --delete-before)"
   fi
 
   ## initial folder create (in case of it doesn't exist
@@ -114,9 +114,20 @@ runRsync() {
     debug "Run: rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/"
     rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/ || return $?
     excode=$?
-    if [ ! "$excode" = 0 ] ; then
-      fatal "An error as occured during the Rsync run, error code : $excode"
-      return $excode
+    if [ ! "$excode" = 0 ]; then
+      case ${excode} in
+        24)
+          # Files vanisheds
+        ;;
+        12)
+          fatal "An error as occured coming probably from space issue on the backup drive."
+          return $excode
+        ;;
+        *)
+          fatal "An error as occured during the Rsync run, error code : $excode"
+          return $excode
+        ;;
+      esac
     fi
   done
 }
@@ -132,7 +143,7 @@ mountTape $tapeDevice || exit 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync
+  runRsync || (umountTape $tapeDevice && exit 1)
 fi
 
 # Umount drive and then clean temp folder

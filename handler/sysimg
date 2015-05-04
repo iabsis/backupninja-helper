@@ -1,0 +1,39 @@
+# -*- mode: sh; sh-basic-offset: 3; indent-tabs-mode: nil; -*-
+# vim: set filetype=sh sw=3 sts=3 expandtab autoindent:
+#
+# tar backup handler script for backupninja
+#
+getconf backupdir /var/backups/
+getconf tarexclude
+getconf tarcompression gz
+getconf tarname rootfs
+
+case ${tarcompression} in
+  bz2)
+    tarargs="-cj"
+  ;;
+  gz)
+    tarargs="-cz"
+  ;;
+  xz)
+    tarargs="-cJ"
+  ;;
+  *)
+    tarargs="-c"
+  ;;
+esac
+
+for folder in  $tarexclude ; do
+  tarargs="$(echo ${tarargs} --exclude=${folder})"
+done
+
+tar ${tarargs} \
+  -f ${backupdir}/${tarname}.tar.${tarcompression} \
+  --directory=/ \
+  --exclude=${backupdir#/}
+  --exclude=proc \
+  --exclude=sys \
+  --exclude=dev/pts \
+  --exclude=home \
+  --exclude=var/www \
+  .

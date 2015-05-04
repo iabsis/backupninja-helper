@@ -1,0 +1,65 @@
+# -*- mode: sh; sh-basic-offset: 3; indent-tabs-mode: nil; -*-
+# vim: set filetype=sh sw=3 sts=3 expandtab autoindent:
+#
+# openldap backup handler script for backupninja
+#
+
+getconf backupdir /var/backups/ldap
+getconf suffixes all
+getconf compress yes
+getconf ldif yes
+getconf restart no
+
+status="ok"
+
+[ -d $backupdir ] || mkdir -p $backupdir
+[ -d $backupdir ] || fatal "Backup directory '$backupdir'"
+
+## LDIF DUMP
+
+if [ "$ldif" == "yes" ]; then
+   dumpdir="$backupdir"
+   [ -d $dumpdir ] || mkdir -p $dumpdir
+
+   for suffix in $suffixes; do
+      execstr="$SLAPCAT -b $suffix"
+      if [ ! $test ]; then
+         if [ "$restart" == "yes" ]; then
+            debug "Shutting down ldap server..."
+            /etc/init.d/slapd stop
+         fi
+
+         ext=
+         if [ "$compress" == "yes" ]; then
+            ext=".gz"
+         fi
+         touch $dumpdir/$suffix.ldif$ext
+         if [ ! -f $dumpdir/$suffix.ldif$ext ]; then
+            fatal "Couldn't create ldif dump file: $dumpdir/$suffix.ldif$ext"
+         fi
+
+         if [ "$compress" == "yes" ]; then
+            execstr="$execstr | $GZIP $GZIP_OPTS > $dumpdir/$suffix.ldif.gz"
+         else
+            execstr="$execstr > $dumpdir/$suffix.ldif"
+         fi
+         debug "$execstr"
+         output=`su root -s /bin/bash -c "set -o pipefail ; $execstr" 2>&1`
+         code=$?
+         if [ "$code" == "0" ]; then
+            debug $output
+            info "Successfully finished ldif export of $suffix"
+         else
+            warning $output
+            warning "Failed ldif export of $suffix"
+         fi
+
+         if [ "$restart" == "yes" ]; then
+            debug "Starting ldap server..."
+            /etc/init.d/slapd start
+         fi
+      fi
+   done
+fi
+
+return 0

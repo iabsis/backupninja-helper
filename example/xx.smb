@@ -1,0 +1,21 @@
+### backupninja RDX config file ###
+
+# filesystem to use with the drive (on the first partition of the drive)
+drivefs = smbfs
+
+# location where store the backup must be //xxx/xxx format.
+servershare = //olivier-debian/partages
+serverlogin = username
+serverpassword = password
+
+# server path is the remote location on the server
+serverpath = backup/
+
+# folder to backup
+backupfolder = /etc /home /var/www /var/backups
+
+# folder prefix name place in the root of the drive.
+folderprefix = backup-
+
+# rsync exclude paterns (separated by space)
+rsyncexclude = nosave nobackup
