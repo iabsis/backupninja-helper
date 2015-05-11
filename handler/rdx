@@ -62,7 +62,10 @@ umountTape() {
     umount $device
     debug "Umounted all instance of $device"
   done
-  [ -e  /tmp/tmp.* ] && rmdir /tmp/tmp.*
+
+  for tempitems in "/tmp/tmp."*; do
+    [ -d  $tempitems ] && rmdir $tempitems
+  done
 }
 
 testWrite() {
@@ -112,22 +115,10 @@ runRsync() {
   for folder in $backupfolder ; do
     mkdir -p $mounttmp/${folderprefix}0/$folder/
     debug "Run: rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/"
-    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/ || return $?
+    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/
     excode=$?
     if [ ! "$excode" = 0 ]; then
-      case ${excode} in
-        24)
-          # Files vanisheds
-        ;;
-        12)
-          fatal "An error as occured coming probably from space issue on the backup drive."
-          return $excode
-        ;;
-        *)
-          fatal "An error as occured during the Rsync run, error code : $excode"
-          return $excode
-        ;;
-      esac
+      return $excode
     fi
   done
 }
@@ -143,7 +134,20 @@ mountTape $tapeDevice || exit 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync || (umountTape $tapeDevice && exit 1)
+  runRsync || (
+    excode=$?
+    umountTape $tapeDevice
+    case $excode in
+      24)
+        debug "warning: nothing bag, some files were deleted during the Rsync"
+      ;;
+      12)
+        fatal "An error as occured coming probably from space issue on the backup drive."
+      ;;
+      *)
+        fatal "An error as occured during the Rsync run, error code : $excode"
+      ;;
+    esac)
 fi
 
 # Umount drive and then clean temp folder
