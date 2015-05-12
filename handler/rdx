@@ -62,7 +62,10 @@ umountTape() {
     umount $device
     debug "Umounted all instance of $device"
   done
-  [ -e  /tmp/tmp.* ] && rmdir /tmp/tmp.*
+
+  for tempitems in "/tmp/tmp."*; do
+    [ -d  $tempitems ] && rmdir $tempitems
+  done
 }
 
 testWrite() {
@@ -122,22 +125,7 @@ runRsync() {
     rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/
     excode=$?
     if [ ! "$excode" = 0 ]; then
-      case ${excode} in
-        23)
-          debug "some files were skipped, but no fatal error, continue the backup"
-        ;;
-        24)
-          debug "Some files were vanished, but no fatal error, continue the backup"
-        ;;
-        12)
-          fatal "An error as occured coming probably from space issue on the backup drive."
-          return $excode
-        ;;
-        *)
-          fatal "An error as occured during the Rsync run, error code : $excode"
-          return $excode
-        ;;
-      esac
+      return $excode
     fi
   done
 }
@@ -153,7 +141,20 @@ mountTape $tapeDevice || return 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync || (umountTape $tapeDevice && return 1)
+  runRsync || (
+    excode=$?
+    umountTape $tapeDevice
+    case $excode in
+      24)
+        debug "warning: nothing bag, some files were deleted during the Rsync"
+      ;;
+      12)
+        fatal "An error as occured coming probably from space issue on the backup drive."
+      ;;
+      *)
+        fatal "An error as occured during the Rsync run, error code : $excode"
+      ;;
+    esac)
 fi
 
 # Umount drive and then clean temp folder
