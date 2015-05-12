@@ -24,7 +24,7 @@ detectTape() {
 }
 
 mountTape() {
-  blockdev --rereadpt /dev/${1}
+  /sbin/blockdev --rereadpt /dev/${1}
   if [ "$?" = 1 ] ; then
     fatal "No tape detected in /dev/${1} or already mounted"
     return 1
@@ -48,7 +48,7 @@ mountTape() {
       return 4
     ;;
     0)
-     debug "Device /dev/${1} mounted on $mounttmp"
+      debug "Device /dev/${1} mounted on $mounttmp"
     ;;
     *)
       fatal "An unknown error has occured when mounting drive, out code: $?"
@@ -72,7 +72,14 @@ testWrite() {
 }
 
 formatTape() {
-  mkfs -t $drivefs /dev/${1}
+
+  cylinders=$(sfdisk -G /dev/${1} | cut -d' ' -f 2)
+  heads=$(sfdisk -G /dev/${1} | cut -d' ' -f 4)
+  sectors=$(sfdisk -G /dev/${1} | cut -d' ' -f 6)
+  size=$(($cylinders * $heads * $sectors - 2048))
+  echo -e "unit: sectors\ndisk : start=2048, size=$size, Id=83" | sfdisk /dev/${1}
+
+  mkfs -t $drivefs /dev/${1}1
 }
 
 runRsync() {
@@ -112,12 +119,15 @@ runRsync() {
   for folder in $backupfolder ; do
     mkdir -p $mounttmp/${folderprefix}0/$folder/
     debug "Run: rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/"
-    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/ || return $?
+    rsync $rsyncargs $folder/* $mounttmp/${folderprefix}0/$folder/
     excode=$?
     if [ ! "$excode" = 0 ]; then
       case ${excode} in
+        23)
+          debug "some files were skipped, but no fatal error, continue the backup"
+        ;;
         24)
-          # Files vanisheds
+          debug "Some files were vanished, but no fatal error, continue the backup"
         ;;
         12)
           fatal "An error as occured coming probably from space issue on the backup drive."
@@ -133,18 +143,20 @@ runRsync() {
 }
 
 tapeDevice=$(detectTape)
-[ -z $tapeDevice ] && exit 1
+[ -z $tapeDevice ] && return 1
 
 # Umount all others intances of tape
 umountTape $tapeDevice
 
 # Mount properly the tape
-mountTape $tapeDevice || exit 1
+mountTape $tapeDevice || return 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync || (umountTape $tapeDevice && exit 1)
+  runRsync || (umountTape $tapeDevice && return 1)
 fi
 
 # Umount drive and then clean temp folder
 umountTape $tapeDevice
+
+return 0

@@ -1,2 +1,3 @@
-# backupninja-rdx
-RDX support for Backupninja backup software
+# backupninja-helpers
+
+This package contains some new helpers scripts for Backup ninja.

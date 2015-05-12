@@ -67,12 +67,15 @@ runRsync() {
   for folder in $backupfolder ; do
     mkdir -p $mounttmp/$serverpath/${folderprefix}0/$folder/
     debug "Run: rsync $rsyncargs $folder/* $mounttmp/$serverpath/${folderprefix}0/$folder/"
-    rsync $rsyncargs $folder/* $mounttmp/$serverpath/${folderprefix}0/$folder/ || return $?
+    rsync $rsyncargs $folder/* $mounttmp/$serverpath/${folderprefix}0/$folder/
     excode=$?
     if [ ! "$excode" = 0 ]; then
       case ${excode} in
+        23)
+          info "info: some files were skipped in ${folder}"
+        ;;
         24)
-          # files vanished, ignoring this error
+          info "info: some files were vanished in ${folder}"
         ;;
         12)
           fatal "An error as occured coming probably from space issue on the backup drive."
@@ -95,8 +98,10 @@ mountSmb || exit 1
 
 # Run Rsync on folder
 if testWrite ; then
-  runRsync || (umountSmb ${servershare} && exit 1)
+  runRsync || (umountSmb ${servershare} && return 1)
 fi
 
 # Umount drive and then clean temp folder
 umountSmb ${servershare}
+
+return 0

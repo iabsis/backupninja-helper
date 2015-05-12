@@ -3,6 +3,7 @@
 #
 # tar backup handler script for backupninja
 #
+
 getconf backupdir /var/backups/
 getconf tarexclude
 getconf tarcompression gz
@@ -37,3 +38,5 @@ tar ${tarargs} \
   --exclude=home \
   --exclude=var/www \
   .
+
+return 0
