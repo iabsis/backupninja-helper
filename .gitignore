@@ -1,0 +1,5 @@
+build-stamp
+configure-stamp
+debian/backupninja-helpers.debhelper.log
+debian/backupninja-helpers.substvars
+debian/backupninja-helpers/
