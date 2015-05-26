@@ -1,2 +1,3 @@
 handler/*		usr/share/backupninja
-examples		  usr/share/doc/backupninja-helpers/examples
+examples		usr/share/doc/backupninja-helpers/examples
+README.md   usr/share/doc/backupninja-helpers
