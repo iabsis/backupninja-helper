@@ -1,0 +1,18 @@
+Source: backupninja-helpers
+Section: admin
+Priority: extra
+Maintainer: Olivier Bitsch <olivier.b@iabsis.com>
+Build-Depends: debhelper (>= 5)
+Standards-Version: 3.7.2
+
+Package: backupninja-helpers
+Architecture: all
+Depends: backupninja
+Description: Helper scripts to help you make proper backups
+ Those helper scripts are dedicated for BackupNinja and help you to
+ easily make backup of your server on external devices like RDX or External
+ hard drive. The following scripts are included
+ .
+ * rdx: make an rsync incremental and differential backup.
+ * ldap: dump an ldap database to a location.
+ * sysimg: make a system backup of you server while runing.
